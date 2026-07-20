@@ -8,3 +8,9 @@ __pycache__/
 .claude
 agent
 skills-lock.json
+
+_site/
+.jekyll-cache/
+.jekyll-metadata
+.bundle/
+vendor/bundle/

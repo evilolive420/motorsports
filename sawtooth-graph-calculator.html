@@ -1,32 +1,15 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>Sawtooth Graph Calculator</title>
+---
+layout: default
+title: Sawtooth Graph Calculator
+wide: true
+---
 <style>
   :root {
-    --bg: #0f1115;
-    --panel: #171a21;
-    --border: #2a2f3a;
-    --text: #e6e9ef;
-    --muted: #9aa3b2;
-    --a1: #4da3ff;
-    --a2: #7fd1ff;
-    --b1: #ff9d4d;
-    --b2: #ffc98a;
-    --powerband: #3ddc84;
+    --panel: #1c1c1c;
+    --border: #434343;
+    --text: #f0e7d5;
+    --muted: #b6b6b6;
   }
-  * { box-sizing: border-box; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 24px 20px 60px;
-    line-height: 1.5;
-  }
-  h1 { font-size: 1.6rem; margin-bottom: 4px; }
   h2 { font-size: 1.15rem; margin: 28px 0 10px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
   .subtitle { color: var(--muted); margin-top: 0; }
   .explainer {
@@ -136,10 +119,8 @@
   .legend-text { fill: var(--text); font-size: 11px; }
   footer { color: var(--muted); font-size: 0.78rem; margin-top: 30px; text-align: center; }
 </style>
-</head>
-<body>
 
-<p><a href="index.html" style="color: var(--a2);">&larr; Back to index</a></p>
+<p><a href="index.html">&larr; Back to index</a></p>
 
 <h1>Sawtooth Graph Calculator</h1>
 <p class="subtitle">RPM vs Speed &mdash; compare two transmissions on one chart.</p>
@@ -232,25 +213,7 @@
 <footer>All calculations run locally in your browser. No network requests, no external libraries.</footer>
 
 <script>
-const TRANSMISSIONS = [
-  { name: "GM Turbo Hydramatic 400 (TH400)", type: "Automatic", era: "Classic", speeds: 3, gear_ratios: [2.48, 1.48, 1.00], torque_rating_lb_ft: "450 (Stock)", key_features: "Heavy-duty 3-speed used behind large big-block engines. Bulletproof strength, popular in high-horsepower drag builds." },
-  { name: "GM Turbo Hydramatic 350 (TH350)", type: "Automatic", era: "Classic", speeds: 3, gear_ratios: [2.52, 1.52, 1.00], torque_rating_lb_ft: "350 (Stock)", key_features: "Lighter and more compact than the TH400. Extremely common behind small-block V8s; highly versatile and robs less power than the TH400." },
-  { name: "Chrysler TorqueFlite 727", type: "Automatic", era: "Classic", speeds: 3, gear_ratios: [2.45, 1.45, 1.00], torque_rating_lb_ft: "450 (Stock)", key_features: "Mopar's equivalent to the TH400. Sat behind the 426 Hemi and 440 Six Pack and is considered one of the strongest factory automatics." },
-  { name: "Ford C6", type: "Automatic", era: "Classic", speeds: 3, gear_ratios: [2.46, 1.46, 1.00], torque_rating_lb_ft: "450 (Stock)", key_features: "Ford's heavy-duty 3-speed automatic used behind massive FE, 385-series big blocks, and the 351 Cleveland." },
-  { name: "GM Powerglide", type: "Automatic", era: "Classic", speeds: 2, gear_ratios: [1.76, 1.00], torque_rating_lb_ft: "300 (Stock)", key_features: "Two-speed automatic originally introduced in the 1950s. Extreme simplicity and strength make it a staple in dedicated drag racing." },
-  { name: "Muncie M20 (Wide Ratio)", type: "Manual", era: "Classic", speeds: 4, gear_ratios: [2.52, 1.88, 1.46, 1.00], torque_rating_lb_ft: "350 (Stock)", key_features: "The standard wide-ratio manual for GM muscle cars, designed for street cars with taller rear-end gears." },
-  { name: "Muncie M21 / M22 (Close Ratio)", type: "Manual", era: "Classic", speeds: 4, gear_ratios: [2.20, 1.64, 1.28, 1.00], torque_rating_lb_ft: "400 (Stock)", key_features: "The heavy-duty M22 ('Rock Crusher') is known for the whining noise of its straight-cut gears." },
-  { name: "Ford Toploader (Wide Ratio)", type: "Manual", era: "Classic", speeds: 4, gear_ratios: [2.78, 1.93, 1.36, 1.00], torque_rating_lb_ft: "450 (Stock)", key_features: "Named because the internal gears were loaded through the top of the case. Incredibly strong and used in cars like Mustangs and Fairlanes." },
-  { name: "Ford Toploader (Close Ratio)", type: "Manual", era: "Classic", speeds: 4, gear_ratios: [2.32, 1.69, 1.29, 1.00], torque_rating_lb_ft: "450 (Stock)", key_features: "Close-ratio variant of Ford's indestructible 4-speed, utilized behind the highest output Total Performance V8s." },
-  { name: "Chrysler A833 4-Speed", type: "Manual", era: "Classic", speeds: 4, gear_ratios: [2.65, 1.91, 1.39, 1.00], torque_rating_lb_ft: "450 (Stock)", key_features: "The go-to heavy-duty manual transmission for Plymouth and Dodge muscle cars, known for being virtually indestructible in factory form." },
-  { name: "GM 4L60E", type: "Automatic", era: "Modern", speeds: 4, gear_ratios: [3.06, 1.62, 1.00, 0.70], torque_rating_lb_ft: "360 (Stock)", key_features: "Modern, electronically controlled 4-speed that evolved from the 700R4. Features a deep first gear for acceleration." },
-  { name: "GM 4L80E", type: "Automatic", era: "Modern", speeds: 4, gear_ratios: [2.48, 1.48, 1.00, 0.75], torque_rating_lb_ft: "440 (Stock)", key_features: "Essentially an electronically controlled TH400 with an overdrive gear. Heavily favored for high-horsepower LS swaps." },
-  { name: "GM 6L80E", type: "Automatic", era: "Modern", speeds: 6, gear_ratios: [4.03, 2.36, 1.53, 1.15, 0.85, 0.67], torque_rating_lb_ft: "430 (Stock)", key_features: "A six-speed automatic that offers a steep first gear for acceleration and double overdrives for cruising." },
-  { name: "ZF 8HP Series (e.g., 8HP75)", type: "Automatic", era: "Modern", speeds: 8, gear_ratios: [4.71, 3.14, 2.11, 1.67, 1.28, 1.00, 0.84, 0.67], torque_rating_lb_ft: "553 (Stock)", key_features: "A modern 8-speed automatic adapted into classic cars for its lightning-fast shifts and excellent close-ratio gear spacing." },
-  { name: "Tremec T-56 Magnum", type: "Manual", era: "Modern", speeds: 6, gear_ratios: [2.66, 1.78, 1.30, 1.00, 0.80, 0.63], torque_rating_lb_ft: "700", key_features: "The most popular modern aftermarket manual swap. A six-speed capable of handling extreme torque, giving close-ratio acceleration and two overdrive gears." },
-  { name: "Tremec TKX", type: "Manual", era: "Modern", speeds: 5, gear_ratios: [2.87, 1.89, 1.28, 1.00, 0.68], torque_rating_lb_ft: "600", key_features: "A five-speed manual specifically designed to fit inside the narrow transmission tunnels of classic muscle cars without requiring floorboard modifications." },
-  { name: "Tremec TR6060", type: "Manual", era: "Modern", speeds: 6, gear_ratios: [2.66, 1.78, 1.30, 1.00, 0.74, 0.50], torque_rating_lb_ft: "600 (Stock)", key_features: "The heavy-duty factory OEM successor to the T-56. Features wider gears and improved synchronizers. Found natively in modern muscle like the Camaro SS, Challenger, and Shelby GT500." }
-];
+const TRANSMISSIONS = {{ site.data.transmissions | jsonify }};
 
 const TIRE_CODE_RE = /^(\d+)\s*\/\s*(\d+)\s*R\s*(\d+)$/i;
 let unit = "mph"; // "mph" | "kph"
@@ -502,6 +465,3 @@ document.getElementById("unitToggle").addEventListener("click", () => {
 document.getElementById("transA").selectedIndex = 0;
 recalcAndRender();
 </script>
-
-</body>
-</html>

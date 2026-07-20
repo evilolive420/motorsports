@@ -1,0 +1,9 @@
+title: Motorsports Tools
+tagline: A small collection of standalone calculators and references.
+description: A small collection of standalone motorsports calculators and references.
+theme: jekyll-theme-midnight
+show_downloads: false
+baseurl: ""
+url: "https://evilolive420.github.io"
+repository: evilolive420/evilolive420.github.io
+markdown: kramdown

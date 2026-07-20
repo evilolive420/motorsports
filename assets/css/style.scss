@@ -1,0 +1,15 @@
+---
+---
+@import "jekyll-theme-midnight";
+
+:root {
+  --a1: #4da3ff;
+  --a2: #7fd1ff;
+  --b1: #ff9d4d;
+  --b2: #ffc98a;
+  --powerband: #3ddc84;
+}
+
+.wide .wrapper,
+.wide header nav,
+.wide section { max-width: 1100px; }
