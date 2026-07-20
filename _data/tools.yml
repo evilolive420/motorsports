@@ -1,0 +1,8 @@
+- title: Sawtooth Graph Calculator
+  url: /sawtooth-graph-calculator.html
+  description: Compare two transmissions on an RPM vs Speed sawtooth chart, with tire size, rear-end ratio, and powerband highlighting.
+  category: motorsports
+- title: FlowCurve
+  url: /flow-curve.html
+  description: Smooth or interpolate pasted MAF calibration data (Voltage/Frequency vs Airflow) using Whittaker-Eilers smoothing or PCHIP interpolation with custom resampling.
+  category: motorsports
