@@ -1,0 +1,846 @@
+---
+layout: default
+title: Shot Group Analyzer
+wide: true
+category: shooting
+description: Mark bullet holes on a target photo to compute group size, mean radius, MOA/MRAD, and point-of-impact offset — entirely in your browser.
+tags: [shooting, ballistics, target, moa, precision]
+---
+<style>
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    gap: 20px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 20px;
+    margin-bottom: 18px;
+  }
+  .card h2 { margin: 0 0 12px; font-size: 1rem; }
+  label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin: 10px 0 4px;
+  }
+  input[type="text"], input[type="number"], select {
+    width: 100%;
+    background: #0d0f14;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 7px 9px;
+    font-size: 0.9rem;
+    box-sizing: border-box;
+  }
+  input[type="file"] { display: block; margin-bottom: 8px; color: var(--text); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .radio-group { margin-bottom: 6px; }
+  .radio-group label {
+    display: inline-flex;
+    align-items: center;
+    font-weight: normal;
+    color: var(--text);
+    font-size: 0.85rem;
+    margin-right: 14px;
+    cursor: pointer;
+  }
+  .radio-group input { margin-right: 5px; }
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    font-weight: normal;
+    font-size: 0.85rem;
+    margin-bottom: 10px;
+    cursor: pointer;
+  }
+  .checkbox-label input { margin-right: 8px; }
+  button {
+    background-color: var(--a1);
+    color: #0d0f14;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    font-size: 0.88rem;
+  }
+  button:hover { background-color: var(--a2); }
+  button.secondary {
+    background-color: #0d0f14;
+    border: 1px solid var(--border);
+    color: var(--text);
+    margin-top: 6px;
+  }
+  button.secondary:hover { border-color: var(--a1); }
+  .mode-buttons { display: flex; gap: 6px; margin-bottom: 8px; }
+  .mode-btn {
+    flex: 1;
+    padding: 8px 4px;
+    font-size: 0.78rem;
+    background: #0d0f14;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .mode-btn.active { background: var(--a1); color: #0d0f14; border-color: var(--a1); font-weight: 600; }
+  .note { font-size: 0.76rem; color: var(--muted); margin: 6px 0 10px; line-height: 1.4; }
+  .error-text { font-size: 0.76rem; color: #ff6b6b; margin: 6px 0 10px; line-height: 1.4; }
+  .results-table { display: flex; flex-direction: column; gap: 2px; }
+  .result-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 0.82rem;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .result-row:last-child { border-bottom: none; }
+  .result-label { color: var(--muted); }
+  .result-value { color: var(--text); font-weight: 600; text-align: right; }
+  .canvas-wrap { background: #0d0f14; border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+  #stage { width: 100%; height: auto; display: block; touch-action: none; cursor: crosshair; border-radius: 4px; }
+  footer { color: var(--muted); font-size: 0.78rem; margin-top: 24px; text-align: center; }
+  @media (max-width: 768px) {
+    .container { grid-template-columns: 1fr; }
+  }
+</style>
+
+{% include back-to-index.html %}
+
+{% include page-header.html %}
+
+<div class="container">
+  <div class="sidebar">
+    <div class="card">
+      <h2>1. Load Photo</h2>
+      <input type="file" id="fileInput" accept="image/*">
+      <div class="note">Your photo never leaves this page — no uploads, no network requests.</div>
+      <div class="note" id="photoInfo"></div>
+    </div>
+
+    <div class="card">
+      <h2>2. Calibrate</h2>
+      <div class="radio-group">
+        <label><input type="radio" name="calibMode" value="simple" checked> Simple (2-point)</label>
+        <label><input type="radio" name="calibMode" value="perspective"> Perspective (4-corner)</label>
+      </div>
+
+      <div id="simpleCalib">
+        <button type="button" id="setScaleLineBtn" class="secondary">Set calibration line</button>
+        <div id="scaleStatus" class="note">Tap 2 points a known distance apart.</div>
+        <label for="knownInches">Known distance between them (inches)</label>
+        <input type="number" id="knownInches" step="0.01" placeholder="e.g. 1.0">
+        <button type="button" id="resetScaleBtn" class="secondary">Reset line</button>
+      </div>
+
+      <div id="perspCalib" style="display:none;">
+        <button type="button" id="setCornersBtn" class="secondary">Tap 4 corners</button>
+        <div id="cornerStatus" class="note">Tap corner 1 of 4 — top-left.</div>
+        <div class="row2">
+          <div>
+            <label for="refWidth">Width (in)</label>
+            <input type="number" id="refWidth" step="0.01" placeholder="e.g. 8.5">
+          </div>
+          <div>
+            <label for="refHeight">Height (in)</label>
+            <input type="number" id="refHeight" step="0.01" placeholder="e.g. 11">
+          </div>
+        </div>
+        <button type="button" id="resetCornersBtn" class="secondary">Reset corners</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>3. Mark Points</h2>
+      <div class="mode-buttons">
+        <button type="button" class="mode-btn" data-mode="aim">Aim Point</button>
+        <button type="button" class="mode-btn active" data-mode="holes">Bullet Holes</button>
+        <button type="button" class="mode-btn" data-mode="idle">Done</button>
+      </div>
+      <div class="note">Tap to add. Tap an existing marker of the current type to remove it, or drag to reposition. Switch to &ldquo;Done&rdquo; to drag/remove any marker, including ones that overlap.</div>
+      <button type="button" id="clearHolesBtn" class="secondary">Clear all holes</button>
+    </div>
+
+    <div class="card">
+      <h2>4. Distance &amp; Units</h2>
+      <div class="row2">
+        <div>
+          <label for="distanceValue">Distance to target</label>
+          <input type="number" id="distanceValue" value="100" step="1" min="0">
+        </div>
+        <div>
+          <label for="distanceUnit">Unit</label>
+          <select id="distanceUnit">
+            <option value="yards" selected>Yards</option>
+            <option value="meters">Meters</option>
+          </select>
+        </div>
+      </div>
+      <button type="button" id="angularToggle" class="secondary">Show: MOA</button>
+    </div>
+
+    <div class="card">
+      <h2>5. Overlay Options</h2>
+      <label class="checkbox-label"><input type="checkbox" id="showBBox" checked> Bounding box</label>
+      <label class="checkbox-label"><input type="checkbox" id="showExtremeCircle" checked> Extreme-radius circle (from Center of Impact)</label>
+      <label class="checkbox-label"><input type="checkbox" id="showWelzl"> Minimum enclosing circle (Welzl)</label>
+      <label class="checkbox-label"><input type="checkbox" id="showHull"> Convex hull</label>
+    </div>
+
+    <div class="card">
+      <h2>Results</h2>
+      <div id="resultsPanel"><div class="note">Upload a photo and mark some holes to see results.</div></div>
+    </div>
+  </div>
+
+  <div class="main-content">
+    <div class="card">
+      <div class="canvas-wrap">
+        <canvas id="stage" width="600" height="400"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>Runs entirely in your browser. Nothing here — photos, marks, or measurements — is ever uploaded or sent over the network.</footer>
+
+<script>
+// --- STATE ---
+const state = {
+  img: null, naturalW: 0, naturalH: 0,
+  canvasW: 600, canvasH: 400,
+
+  calibMode: 'simple',
+  scalePoints: [], knownInches: null, pixelsPerInch: null,
+  perspCorners: [], refWidthIn: null, refHeightIn: null, homography: null,
+
+  mode: 'holes', prevMode: 'holes',
+  aimPoint: null,
+  holes: [],
+  drag: null,
+
+  distanceValue: 100, distanceUnit: 'yards',
+  angularUnit: 'MOA',
+  showBBox: true, showExtremeCircle: true, showWelzl: false, showHull: false
+};
+let holeIdCounter = 0;
+
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+
+// --- UTILS ---
+function getCss(varName) {
+  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+}
+function dist(p, q) { return Math.hypot(p.x - q.x, p.y - q.y); }
+function cross(o, a, b) { return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x); }
+function meanPoint(pts) {
+  const n = pts.length;
+  return { x: pts.reduce((s, p) => s + p.x, 0) / n, y: pts.reduce((s, p) => s + p.y, 0) / n };
+}
+function shoelaceArea(pts) {
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const p1 = pts[i], p2 = pts[(i + 1) % pts.length];
+    a += p1.x * p2.y - p2.x * p1.y;
+  }
+  return Math.abs(a) / 2;
+}
+
+// --- HOMOGRAPHY (hand-rolled DLT; solveLinear adapted from the Gaussian-elimination
+// solver already used for the Whittaker-Eilers matrix system in flow-curve.html) ---
+function solveLinear(A, b) {
+  const n = A.length;
+  const M = A.map(row => [...row]);
+  const x = [...b];
+  for (let i = 0; i < n; i++) {
+    let maxRow = i;
+    for (let k = i + 1; k < n; k++) {
+      if (Math.abs(M[k][i]) > Math.abs(M[maxRow][i])) maxRow = k;
+    }
+    [M[i], M[maxRow]] = [M[maxRow], M[i]];
+    [x[i], x[maxRow]] = [x[maxRow], x[i]];
+    const pivot = M[i][i];
+    if (Math.abs(pivot) < 1e-10) return null;
+    for (let j = i + 1; j < n; j++) {
+      const factor = M[j][i] / pivot;
+      x[j] -= factor * x[i];
+      for (let k = i; k < n; k++) M[j][k] -= factor * M[i][k];
+    }
+  }
+  const res = new Array(n).fill(0);
+  for (let i = n - 1; i >= 0; i--) {
+    let sum = 0;
+    for (let j = i + 1; j < n; j++) sum += M[i][j] * res[j];
+    if (Math.abs(M[i][i]) < 1e-10) return null;
+    res[i] = (x[i] - sum) / M[i][i];
+  }
+  return res;
+}
+function isDegenerateQuad(pts) {
+  // A long thin sliver (corners nearly collinear but spread far apart) has plenty of
+  // shoelace area yet is a numerically ill-conditioned correspondence that Gaussian
+  // elimination can still "solve" without ever hitting the pivot-singularity guard,
+  // producing a wild, unusable transform once extrapolated beyond the 4 corners. Check
+  // every interior angle isn't near-straight (or near-zero) in addition to the area.
+  if (shoelaceArea(pts) < 25) return true;
+  for (let i = 0; i < 4; i++) {
+    const prev = pts[(i + 3) % 4], cur = pts[i], next = pts[(i + 1) % 4];
+    const v1x = prev.x - cur.x, v1y = prev.y - cur.y;
+    const v2x = next.x - cur.x, v2y = next.y - cur.y;
+    const len1 = Math.hypot(v1x, v1y), len2 = Math.hypot(v2x, v2y);
+    if (len1 < 1e-6 || len2 < 1e-6) return true;
+    const cosA = Math.max(-1, Math.min(1, (v1x * v2x + v1y * v2y) / (len1 * len2)));
+    const angleDeg = Math.acos(cosA) * 180 / Math.PI;
+    if (angleDeg < 5 || angleDeg > 175) return true;
+  }
+  return false;
+}
+function computeHomography(src4, dst4) {
+  if (isDegenerateQuad(src4)) return null;
+  const A = [], b = [];
+  for (let i = 0; i < 4; i++) {
+    const { x: xi, y: yi } = src4[i];
+    const { x: ui, y: vi } = dst4[i];
+    A.push([xi, yi, 1, 0, 0, 0, -xi * ui, -yi * ui]); b.push(ui);
+    A.push([0, 0, 0, xi, yi, 1, -xi * vi, -yi * vi]); b.push(vi);
+  }
+  const sol = solveLinear(A, b);
+  if (!sol) return null;
+  const [a, bb, c, d, e, f, g, h] = sol;
+  return { a, b: bb, c, d, e, f, g, h };
+}
+function applyHomography(H, pt) {
+  const denom = H.g * pt.x + H.h * pt.y + 1;
+  if (Math.abs(denom) < 1e-9) return null;
+  return { x: (H.a * pt.x + H.b * pt.y + H.c) / denom, y: (H.d * pt.x + H.e * pt.y + H.f) / denom };
+}
+function imageToInches(pt) {
+  if (state.calibMode === 'perspective' && state.homography) return applyHomography(state.homography, pt);
+  if (state.calibMode === 'simple' && state.pixelsPerInch) return { x: pt.x / state.pixelsPerInch, y: pt.y / state.pixelsPerInch };
+  return null;
+}
+
+// --- CONVEX HULL (Monotone Chain) ---
+function convexHull(points) {
+  const pts = points.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+  const dedup = [];
+  for (const p of pts) {
+    if (dedup.length === 0 || dist(dedup[dedup.length - 1], p) > 1e-6) dedup.push(p);
+  }
+  if (dedup.length <= 2) return dedup;
+  const lower = [];
+  for (const p of dedup) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper = [];
+  for (let i = dedup.length - 1; i >= 0; i--) {
+    const p = dedup[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  lower.pop(); upper.pop();
+  return lower.concat(upper);
+}
+function hullArea(hull) { return hull.length < 3 ? 0 : shoelaceArea(hull); }
+
+// --- MINIMUM ENCLOSING CIRCLE (Welzl's algorithm) ---
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function circumcircle3(a, b, c) {
+  const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+  if (Math.abs(d) < 1e-9) {
+    // collinear fallback: MEC of 3 collinear points = diameter circle of the 2 farthest apart
+    const pairs = [[a, b], [b, c], [a, c]];
+    let best = pairs[0], bestD = dist(a, b);
+    for (const [p, q] of pairs) { const dd = dist(p, q); if (dd > bestD) { bestD = dd; best = [p, q]; } }
+    return circleFromBoundary(best);
+  }
+  const aSq = a.x * a.x + a.y * a.y, bSq = b.x * b.x + b.y * b.y, cSq = c.x * c.x + c.y * c.y;
+  const ux = (aSq * (b.y - c.y) + bSq * (c.y - a.y) + cSq * (a.y - b.y)) / d;
+  const uy = (aSq * (c.x - b.x) + bSq * (a.x - c.x) + cSq * (b.x - a.x)) / d;
+  const center = { x: ux, y: uy };
+  return { center, r: dist(center, a) };
+}
+function circleFromBoundary(R) {
+  if (R.length === 0) return null;
+  if (R.length === 1) return { center: R[0], r: 0 };
+  if (R.length === 2) return { center: { x: (R[0].x + R[1].x) / 2, y: (R[0].y + R[1].y) / 2 }, r: dist(R[0], R[1]) / 2 };
+  return circumcircle3(R[0], R[1], R[2]);
+}
+function welzlRec(P, R, n) {
+  if (n === 0 || R.length === 3) return circleFromBoundary(R);
+  const p = P[n - 1];
+  const D = welzlRec(P, R, n - 1);
+  if (D && dist(p, D.center) <= D.r + 1e-7) return D;
+  return welzlRec(P, R.concat([p]), n - 1);
+}
+function minEnclosingCircle(points) {
+  if (points.length === 0) return null;
+  const shuffled = shuffle(points);
+  return welzlRec(shuffled, [], shuffled.length);
+}
+
+// --- SHARED GROUP GEOMETRY (used both for the numeric results, on inch-space
+// points, and for canvas overlay placement, on raw pixel-space points) ---
+function groupGeometry(points, opts) {
+  const n = points.length;
+  const g = { n };
+  if (n === 0) return g;
+  g.coi = meanPoint(points);
+  if (n >= 2) {
+    let es = 0;
+    for (let i = 0; i < n - 1; i++) for (let j = i + 1; j < n; j++) es = Math.max(es, dist(points[i], points[j]));
+    g.extremeSpread = es;
+  }
+  const radii = points.map(p => dist(p, g.coi));
+  g.meanRadius = radii.reduce((a, b) => a + b, 0) / n;
+  g.extremeRadius = Math.max(...radii);
+  const xs = points.map(p => p.x), ys = points.map(p => p.y);
+  g.minX = Math.min(...xs); g.maxX = Math.max(...xs); g.minY = Math.min(...ys); g.maxY = Math.max(...ys);
+  g.vSpread = g.maxY - g.minY; g.hSpread = g.maxX - g.minX; g.bboxArea = g.vSpread * g.hSpread;
+  if (opts && opts.hull && n >= 3) { g.hull = convexHull(points); g.hullArea = hullArea(g.hull); }
+  if (opts && opts.welzl) { g.welzl = minEnclosingCircle(points); }
+  return g;
+}
+
+// --- RESULTS (inch-space) ---
+function computeResults() {
+  const calibrated = (state.calibMode === 'simple' && !!state.pixelsPerInch) || (state.calibMode === 'perspective' && !!state.homography);
+  const result = { calibrated, holeCount: state.holes.length };
+  if (!calibrated) return result;
+  const inchHoles = state.holes.map(h => imageToInches(h));
+  Object.assign(result, groupGeometry(inchHoles, { hull: state.showHull, welzl: state.showWelzl }));
+  if (state.aimPoint && result.coi) {
+    const inchAim = imageToInches(state.aimPoint);
+    const dx = result.coi.x - inchAim.x;
+    const dy = result.coi.y - inchAim.y; // +y is down in both canvas space and the
+                                          // homography dst rect (origin top-left)
+    result.windage = { value: Math.abs(dx), dir: dx >= 0 ? 'Right' : 'Left' };
+    result.elevation = { value: Math.abs(dy), dir: dy >= 0 ? 'Low' : 'High' };
+  }
+  return result;
+}
+
+// --- ANGULAR CONVERSION ---
+function yardsFromDistance() {
+  const v = parseFloat(state.distanceValue);
+  if (!isFinite(v) || v <= 0) return null;
+  return state.distanceUnit === 'meters' ? v * 1.09361 : v;
+}
+function toMOA(inches, distanceYards) { return (inches * 100) / (distanceYards * 1.047); }
+function toMRAD(inches, distanceYards) { return (inches * 100) / (distanceYards * 3.6); }
+function angularStr(inches) {
+  const dy = yardsFromDistance();
+  if (dy === null || !isFinite(inches)) return 'N/A';
+  const v = state.angularUnit === 'MOA' ? toMOA(inches, dy) : toMRAD(inches, dy);
+  return v.toFixed(2) + ' ' + state.angularUnit;
+}
+function fmtIn(n) { return isFinite(n) ? n.toFixed(2) + ' in' : 'N/A'; }
+
+// --- RESULTS PANEL ---
+function resultRow(label, value) {
+  return '<div class="result-row"><span class="result-label">' + label + '</span><span class="result-value">' + value + '</span></div>';
+}
+function calibStatusText() {
+  if (state.calibMode === 'simple') {
+    return state.pixelsPerInch ? 'Calibrated: ' + state.pixelsPerInch.toFixed(1) + ' px/in (simple 2-point)' : 'Not calibrated — set a calibration line and enter its known distance.';
+  }
+  return state.homography ? 'Calibrated via 4-corner perspective correction (' + state.refWidthIn + '×' + state.refHeightIn + ' in reference)' : 'Not calibrated — tap the 4 corners and enter their width/height.';
+}
+function renderResultsPanel(r) {
+  const panel = document.getElementById('resultsPanel');
+  if (!r.calibrated) {
+    panel.innerHTML = '<div class="note">' + calibStatusText() + '</div>';
+    return;
+  }
+  if (!r.n) {
+    panel.innerHTML = '<div class="note">Mark at least 1 bullet hole to see results.</div><div class="note">' + calibStatusText() + '</div>';
+    return;
+  }
+  let rows = '';
+  rows += resultRow('Holes marked', r.n);
+  rows += resultRow('Extreme Spread (Group Size)', r.n >= 2 ? fmtIn(r.extremeSpread) + ' (' + angularStr(r.extremeSpread) + ')' : 'N/A (need 2+ holes)');
+  rows += resultRow('Mean Radius', fmtIn(r.meanRadius) + ' (' + angularStr(r.meanRadius) + ')');
+  rows += resultRow('Extreme Group Radius (from COI)', fmtIn(r.extremeRadius));
+  rows += resultRow('Max Vertical Spread', fmtIn(r.vSpread));
+  rows += resultRow('Max Horizontal Spread', fmtIn(r.hSpread));
+  rows += resultRow('Group Area (bounding box)', isFinite(r.bboxArea) ? r.bboxArea.toFixed(2) + ' in²' : 'N/A');
+  if (state.showHull) rows += resultRow('Group Area (convex hull)', r.n >= 3 ? r.hullArea.toFixed(2) + ' in²' : 'N/A — need 3+ holes');
+  if (r.windage) {
+    rows += resultRow('Windage', fmtIn(r.windage.value) + ' ' + r.windage.dir + ' (' + angularStr(r.windage.value) + ')');
+    rows += resultRow('Elevation', fmtIn(r.elevation.value) + ' ' + r.elevation.dir + ' (' + angularStr(r.elevation.value) + ')');
+  } else {
+    rows += resultRow('Windage / Elevation', 'Mark an aim point to see POI offset');
+  }
+  if (state.showWelzl) rows += resultRow('Min. Enclosing Circle (Welzl) radius', r.welzl ? fmtIn(r.welzl.r) : 'N/A');
+  panel.innerHTML = '<div class="results-table">' + rows + '</div><div class="note" style="margin-top:8px;">' + calibStatusText() + '</div>';
+}
+
+// --- CANVAS RENDERING (pixel-space overlays; recomputed fresh from raw canvas
+// coordinates so they render correctly even before/without calibration) ---
+function drawCrosshair(pt, color, size, circled) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(pt.x - size, pt.y); ctx.lineTo(pt.x + size, pt.y);
+  ctx.moveTo(pt.x, pt.y - size); ctx.lineTo(pt.x, pt.y + size);
+  if (circled) { ctx.moveTo(pt.x + size * 0.7, pt.y); ctx.arc(pt.x, pt.y, size * 0.7, 0, Math.PI * 2); }
+  ctx.stroke();
+}
+function redraw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!state.img) {
+    ctx.fillStyle = getCss('--muted');
+    ctx.font = '16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Upload a photo to begin', canvas.width / 2, canvas.height / 2);
+    return;
+  }
+  ctx.drawImage(state.img, 0, 0, state.canvasW, state.canvasH);
+
+  if (state.perspCorners.length > 0) {
+    ctx.strokeStyle = getCss('--b1'); ctx.lineWidth = 2; ctx.setLineDash([]);
+    ctx.beginPath();
+    state.perspCorners.forEach((c, i) => { i === 0 ? ctx.moveTo(c.x, c.y) : ctx.lineTo(c.x, c.y); });
+    if (state.perspCorners.length === 4) ctx.closePath();
+    ctx.stroke();
+    state.perspCorners.forEach((c, i) => {
+      ctx.fillStyle = getCss('--b1');
+      ctx.beginPath(); ctx.arc(c.x, c.y, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = getCss('--text'); ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(String(i + 1), c.x, c.y - 10);
+    });
+  }
+
+  if (state.scalePoints.length > 0) {
+    ctx.strokeStyle = getCss('--a2'); ctx.lineWidth = 2; ctx.setLineDash([]);
+    if (state.scalePoints.length === 2) {
+      ctx.beginPath();
+      ctx.moveTo(state.scalePoints[0].x, state.scalePoints[0].y);
+      ctx.lineTo(state.scalePoints[1].x, state.scalePoints[1].y);
+      ctx.stroke();
+    }
+    state.scalePoints.forEach(p => {
+      ctx.fillStyle = getCss('--a2');
+      ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill();
+    });
+  }
+
+  const pg = groupGeometry(state.holes, { hull: state.showHull, welzl: state.showWelzl });
+
+  if (state.showHull && pg.hull && pg.hull.length >= 3) {
+    ctx.strokeStyle = getCss('--muted'); ctx.setLineDash([3, 3]); ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    pg.hull.forEach((p, i) => { i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y); });
+    ctx.closePath(); ctx.stroke();
+  }
+  if (state.showBBox && pg.n >= 1) {
+    ctx.strokeStyle = getCss('--a2'); ctx.setLineDash([6, 4]); ctx.lineWidth = 1.5;
+    ctx.strokeRect(pg.minX, pg.minY, pg.hSpread, pg.vSpread);
+  }
+  if (state.showExtremeCircle && pg.n >= 1) {
+    ctx.strokeStyle = getCss('--b2'); ctx.setLineDash([6, 4]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(pg.coi.x, pg.coi.y, pg.extremeRadius, 0, Math.PI * 2); ctx.stroke();
+  }
+  if (state.showWelzl && pg.welzl) {
+    ctx.strokeStyle = getCss('--muted'); ctx.setLineDash([2, 3]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(pg.welzl.center.x, pg.welzl.center.y, pg.welzl.r, 0, Math.PI * 2); ctx.stroke();
+  }
+  if (state.aimPoint && pg.n >= 1) {
+    ctx.strokeStyle = getCss('--text'); ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(state.aimPoint.x, state.aimPoint.y);
+    ctx.lineTo(pg.coi.x, pg.coi.y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  if (pg.n >= 1) drawCrosshair(pg.coi, getCss('--a1'), 10);
+  if (state.aimPoint) drawCrosshair(state.aimPoint, getCss('--b1'), 10, true);
+
+  state.holes.forEach(h => {
+    const isDragging = state.drag && state.drag.kind === 'hole' && state.drag.id === h.id;
+    ctx.strokeStyle = getCss('--powerband');
+    ctx.lineWidth = isDragging ? 3 : 2;
+    ctx.beginPath(); ctx.arc(h.x, h.y, isDragging ? 10 : 7, 0, Math.PI * 2); ctx.stroke();
+  });
+}
+
+// --- CALIBRATION DERIVATION ---
+function updatePixelsPerInch() {
+  state.pixelsPerInch = (state.scalePoints.length === 2 && state.knownInches)
+    ? dist(state.scalePoints[0], state.scalePoints[1]) / state.knownInches
+    : null;
+}
+function updateHomography() {
+  if (state.perspCorners.length === 4 && state.refWidthIn && state.refHeightIn) {
+    const dst = [{ x: 0, y: 0 }, { x: state.refWidthIn, y: 0 }, { x: state.refWidthIn, y: state.refHeightIn }, { x: 0, y: state.refHeightIn }];
+    state.homography = computeHomography(state.perspCorners, dst);
+  } else {
+    state.homography = null;
+  }
+}
+function updateCalibStatusTexts() {
+  const scaleStatus = document.getElementById('scaleStatus');
+  if (state.scalePoints.length === 0) scaleStatus.textContent = 'Tap 2 points a known distance apart.';
+  else if (state.scalePoints.length === 1) scaleStatus.textContent = 'Tap the second point.';
+  else scaleStatus.textContent = state.pixelsPerInch ? state.pixelsPerInch.toFixed(1) + ' px/in' : 'Enter the known distance below.';
+
+  const cornerStatus = document.getElementById('cornerStatus');
+  const labels = ['top-left', 'top-right', 'bottom-right', 'bottom-left'];
+  if (state.perspCorners.length < 4) cornerStatus.textContent = 'Tap corner ' + (state.perspCorners.length + 1) + ' of 4 — ' + labels[state.perspCorners.length] + '.';
+  else cornerStatus.textContent = state.homography ? 'Corners set. Calibrated.' : (state.perspCorners.length === 4 && state.refWidthIn && state.refHeightIn && isDegenerateQuad(state.perspCorners) ? 'Corners are too close to a line — reset and retap.' : 'Corners set — enter width & height below.');
+}
+
+function recalcAndRender() {
+  updatePixelsPerInch();
+  updateHomography();
+  renderResultsPanel(computeResults());
+  updateCalibStatusTexts();
+  redraw();
+}
+
+// --- POINTER INTERACTION ---
+function getCanvasPoint(evt) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (evt.clientX - rect.left) * (canvas.width / rect.width),
+    y: (evt.clientY - rect.top) * (canvas.height / rect.height)
+  };
+}
+function getDraggedPoint(d) {
+  if (d.kind === 'aim') return state.aimPoint;
+  if (d.kind === 'hole') return state.holes.find(h => h.id === d.id);
+  if (d.kind === 'scale') return state.scalePoints[d.id];
+  if (d.kind === 'corner') return state.perspCorners[d.id];
+  return null;
+}
+function hitTestMarkers(pt, pointerType) {
+  // Hit-testing is scoped to the active mode: bullet holes commonly cluster right on
+  // top of the aim point, so matching every marker kind regardless of mode would make
+  // a tap meant to add a hole instead grab/delete the aim marker underneath it. "Done"
+  // mode is the escape hatch for general drag/delete across all marker kinds.
+  const tol = pointerType === 'touch' ? 22 : 14;
+  const checkAim = state.mode === 'aim' || state.mode === 'idle';
+  const checkHoles = state.mode === 'holes' || state.mode === 'idle';
+  const checkScale = state.mode === 'scale' || state.mode === 'idle';
+  const checkCorner = state.mode === 'perspective' || state.mode === 'idle';
+  if (checkAim && state.aimPoint && dist(pt, state.aimPoint) <= tol) return { kind: 'aim' };
+  if (checkHoles) {
+    for (let i = state.holes.length - 1; i >= 0; i--) {
+      if (dist(pt, state.holes[i]) <= tol) return { kind: 'hole', id: state.holes[i].id };
+    }
+  }
+  if (checkScale) {
+    for (let i = 0; i < state.scalePoints.length; i++) {
+      if (dist(pt, state.scalePoints[i]) <= tol) return { kind: 'scale', id: i };
+    }
+  }
+  if (checkCorner) {
+    for (let i = 0; i < state.perspCorners.length; i++) {
+      if (dist(pt, state.perspCorners[i]) <= tol) return { kind: 'corner', id: i };
+    }
+  }
+  return null;
+}
+function onPointerDown(evt) {
+  if (!state.img) return;
+  if (state.drag) return; // a second finger/pointer landing mid-drag must not steal or corrupt it
+  evt.preventDefault();
+  const pt = getCanvasPoint(evt);
+  const hit = hitTestMarkers(pt, evt.pointerType);
+  if (hit) {
+    canvas.setPointerCapture(evt.pointerId);
+    state.drag = { kind: hit.kind, id: hit.id, pointerId: evt.pointerId, moved: false, downPt: pt };
+    return;
+  }
+  if (state.mode === 'scale' && state.scalePoints.length < 2) {
+    state.scalePoints.push(pt);
+    if (state.scalePoints.length === 2) state.mode = state.prevMode;
+  } else if (state.mode === 'perspective' && state.perspCorners.length < 4) {
+    state.perspCorners.push(pt);
+    if (state.perspCorners.length === 4) state.mode = state.prevMode;
+  } else if (state.mode === 'aim') {
+    state.aimPoint = pt;
+  } else if (state.mode === 'holes') {
+    state.holes.push({ id: holeIdCounter++, x: pt.x, y: pt.y });
+  }
+  recalcAndRender();
+}
+function onPointerMove(evt) {
+  if (!state.drag || evt.pointerId !== state.drag.pointerId) return;
+  evt.preventDefault();
+  const pt = getCanvasPoint(evt);
+  pt.x = Math.max(0, Math.min(state.canvasW, pt.x));
+  pt.y = Math.max(0, Math.min(state.canvasH, pt.y));
+  const d = state.drag;
+  if (dist(pt, d.downPt) > 4) d.moved = true;
+  const target = getDraggedPoint(d);
+  if (target) { target.x = pt.x; target.y = pt.y; }
+  recalcAndRender();
+}
+function onPointerUp(evt) {
+  if (!state.drag || evt.pointerId !== state.drag.pointerId) return;
+  const d = state.drag;
+  try { canvas.releasePointerCapture(d.pointerId); } catch (e) { /* pointer already released */ }
+  if (!d.moved) {
+    if (d.kind === 'aim') state.aimPoint = null;
+    else if (d.kind === 'hole') state.holes = state.holes.filter(h => h.id !== d.id);
+    // scale/corner points: tap-to-delete is intentionally disabled, use the Reset buttons instead
+  }
+  state.drag = null;
+  recalcAndRender();
+}
+canvas.style.touchAction = 'none';
+canvas.addEventListener('pointerdown', onPointerDown);
+canvas.addEventListener('pointermove', onPointerMove);
+canvas.addEventListener('pointerup', onPointerUp);
+canvas.addEventListener('pointercancel', onPointerUp);
+
+// --- UI WIRING ---
+function setPhotoInfo(text, isError) {
+  const el = document.getElementById('photoInfo');
+  el.textContent = text;
+  el.className = isError ? 'error-text' : 'note';
+}
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  setPhotoInfo('Loading…', false);
+  const reader = new FileReader();
+  reader.onerror = () => setPhotoInfo('Could not read that file. Try a different photo.', true);
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onerror = () => setPhotoInfo('That file doesn’t look like a valid image. Try a different photo.', true);
+    img.onload = () => {
+      state.img = img;
+      state.naturalW = img.naturalWidth;
+      state.naturalH = img.naturalHeight;
+      const maxEdge = 1400;
+      const longEdge = Math.max(img.naturalWidth, img.naturalHeight);
+      const scale = longEdge > maxEdge ? maxEdge / longEdge : 1;
+      state.canvasW = Math.round(img.naturalWidth * scale);
+      state.canvasH = Math.round(img.naturalHeight * scale);
+      canvas.width = state.canvasW;
+      canvas.height = state.canvasH;
+
+      state.scalePoints = []; state.pixelsPerInch = null; state.knownInches = null;
+      state.perspCorners = []; state.homography = null; state.refWidthIn = null; state.refHeightIn = null;
+      state.holes = []; state.aimPoint = null; state.drag = null;
+      document.getElementById('knownInches').value = '';
+      document.getElementById('refWidth').value = '';
+      document.getElementById('refHeight').value = '';
+
+      setPhotoInfo(img.naturalWidth + '×' + img.naturalHeight + 'px, displayed at ' + state.canvasW + '×' + state.canvasH, false);
+      recalcAndRender();
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+document.querySelectorAll('input[name="calibMode"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    if (!radio.checked) return;
+    state.calibMode = radio.value;
+    document.getElementById('simpleCalib').style.display = state.calibMode === 'simple' ? '' : 'none';
+    document.getElementById('perspCalib').style.display = state.calibMode === 'perspective' ? '' : 'none';
+    recalcAndRender();
+  });
+});
+
+document.getElementById('setScaleLineBtn').addEventListener('click', () => {
+  if (state.mode !== 'scale' && state.mode !== 'perspective') state.prevMode = state.mode;
+  state.scalePoints = []; state.pixelsPerInch = null;
+  state.mode = 'scale';
+  modeButtons.forEach(b => b.classList.remove('active'));
+  recalcAndRender();
+});
+document.getElementById('resetScaleBtn').addEventListener('click', () => {
+  state.scalePoints = []; state.pixelsPerInch = null;
+  recalcAndRender();
+});
+document.getElementById('knownInches').addEventListener('input', (e) => {
+  const v = parseFloat(e.target.value);
+  state.knownInches = isFinite(v) && v > 0 ? v : null;
+  recalcAndRender();
+});
+
+document.getElementById('setCornersBtn').addEventListener('click', () => {
+  if (state.mode !== 'scale' && state.mode !== 'perspective') state.prevMode = state.mode;
+  state.perspCorners = []; state.homography = null;
+  state.mode = 'perspective';
+  modeButtons.forEach(b => b.classList.remove('active'));
+  recalcAndRender();
+});
+document.getElementById('resetCornersBtn').addEventListener('click', () => {
+  state.perspCorners = []; state.homography = null;
+  recalcAndRender();
+});
+document.getElementById('refWidth').addEventListener('input', (e) => {
+  const v = parseFloat(e.target.value);
+  state.refWidthIn = isFinite(v) && v > 0 ? v : null;
+  recalcAndRender();
+});
+document.getElementById('refHeight').addEventListener('input', (e) => {
+  const v = parseFloat(e.target.value);
+  state.refHeightIn = isFinite(v) && v > 0 ? v : null;
+  recalcAndRender();
+});
+
+const modeButtons = document.querySelectorAll('.mode-btn');
+modeButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    state.mode = btn.dataset.mode;
+    state.prevMode = state.mode;
+    modeButtons.forEach(b => b.classList.toggle('active', b === btn));
+    recalcAndRender();
+  });
+});
+document.getElementById('clearHolesBtn').addEventListener('click', () => {
+  state.holes = [];
+  recalcAndRender();
+});
+
+document.getElementById('distanceValue').addEventListener('input', (e) => {
+  state.distanceValue = e.target.value;
+  recalcAndRender();
+});
+document.getElementById('distanceUnit').addEventListener('change', (e) => {
+  state.distanceUnit = e.target.value;
+  recalcAndRender();
+});
+document.getElementById('angularToggle').addEventListener('click', (e) => {
+  state.angularUnit = state.angularUnit === 'MOA' ? 'MRAD' : 'MOA';
+  e.target.textContent = 'Show: ' + state.angularUnit;
+  recalcAndRender();
+});
+
+['showBBox', 'showExtremeCircle', 'showWelzl', 'showHull'].forEach(id => {
+  document.getElementById(id).addEventListener('change', (e) => {
+    state[id] = e.target.checked;
+    recalcAndRender();
+  });
+});
+
+recalcAndRender();
+</script>
+
+{% include support-link.html %}

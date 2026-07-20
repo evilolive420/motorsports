@@ -8,3 +8,8 @@
   description: Smooth or interpolate pasted MAF calibration data (Voltage/Frequency vs Airflow) using Whittaker-Eilers smoothing or PCHIP interpolation with custom resampling.
   category: motorsports
   tags: [maf, calibration, smoothing, interpolation]
+- title: Shot Group Analyzer
+  url: /shot-group-analysis.html
+  description: Mark bullet holes on a target photo to compute group size, mean radius, MOA/MRAD, and point-of-impact offset, with optional manual perspective correction.
+  category: shooting
+  tags: [shooting, ballistics, target, moa, precision]

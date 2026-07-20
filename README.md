@@ -8,6 +8,7 @@ A small collection of standalone tools, calculators, and references, built as a 
 
 - **[Sawtooth Graph Calculator](https://evilolive420.github.io/sawtooth-graph-calculator.html)** — Compare two transmissions on an RPM vs Speed sawtooth chart, with tire size, rear-end ratio, and powerband highlighting.
 - **[FlowCurve](https://evilolive420.github.io/flow-curve.html)** — Smooth or interpolate pasted MAF calibration data (Voltage/Frequency vs Airflow) using Whittaker-Eilers smoothing or PCHIP interpolation with custom resampling.
+- **[Shot Group Analyzer](https://evilolive420.github.io/shot-group-analysis.html)** — Mark bullet holes on a target photo to compute group size, mean radius, MOA/MRAD, and point-of-impact offset, with optional manual perspective correction.
 
 ## Local development
 
