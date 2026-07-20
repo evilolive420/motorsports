@@ -1,0 +1,39 @@
+---
+layout: default
+title: Tools by Tag
+wide: true
+---
+{% include back-to-index.html %}
+
+<h1>Tools by Tag</h1>
+<p class="subtitle" id="tagFilterLabel">Showing all tools.</p>
+
+<ul class="pages" id="toolList">
+  {% for tool in site.data.tools %}
+  <li data-tags="{{ tool.tags | join: ' ' | downcase }}">
+    <a href="{{ tool.url | relative_url }}">{{ tool.title }}</a>
+    <p>{{ tool.description }}</p>
+    {% if tool.tags %}
+    <ul class="tags">
+      {% for tag in tool.tags %}
+      <li class="tag"><a href="{{ '/' | relative_url }}tags.html?tag={{ tag | url_encode }}">{{ tag }}</a></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+
+<script>
+(function () {
+  var params = new URLSearchParams(window.location.search);
+  var tag = params.get('tag');
+  var label = document.getElementById('tagFilterLabel');
+  if (!tag) return;
+  label.textContent = 'Showing tools tagged: ' + tag;
+  document.querySelectorAll('#toolList > li').forEach(function (li) {
+    var tags = (li.dataset.tags || '').split(' ');
+    li.style.display = tags.indexOf(tag.toLowerCase()) === -1 ? 'none' : '';
+  });
+})();
+</script>

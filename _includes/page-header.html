@@ -5,7 +5,7 @@
 {% if page.tags %}
 <ul class="tags">
   {% for tag in page.tags %}
-  <li class="tag">{{ tag }}</li>
+  <li class="tag"><a href="{{ '/' | relative_url }}tags.html?tag={{ tag | url_encode }}">{{ tag }}</a></li>
   {% endfor %}
 </ul>
 {% endif %}
