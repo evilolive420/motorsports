@@ -1,6 +1,6 @@
-# Motorsports Tools
+# evilolive's Tools
 
-A small collection of standalone calculators and references, built as a static [Jekyll](https://jekyllrb.com/) site and hosted on GitHub Pages.
+A small collection of standalone tools, calculators, and references, built as a static [Jekyll](https://jekyllrb.com/) site and hosted on GitHub Pages. Not limited to any one category — new tools get grouped under whatever `category` fits.
 
 **Live site:** https://evilolive420.github.io
 
